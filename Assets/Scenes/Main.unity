@@ -243,8 +243,9 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   meshToPlace: {fileID: 7478562681640581938, guid: 4bd81f817a4fa5046b3cab1487a5f579,
     type: 3}
-  minRadius: 1
+  minRadius: 0.5
   maxRadius: 10
+  densityTexture: {fileID: 2800000, guid: 048ef314f4dea8c4e9184e59a61a0270, type: 3}
 --- !u!1 &1169220514
 GameObject:
   m_ObjectHideFlags: 0
