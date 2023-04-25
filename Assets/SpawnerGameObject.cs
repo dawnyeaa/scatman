@@ -7,6 +7,7 @@ public class SpawnerGameObject : MonoBehaviour {
     
     public float minRadius, maxRadius;
     public Texture2D densityTexture;
+    private Texture2D readableDensityTexture;
 
     void Start() {
         List<Vector2> list = poisson(minRadius, maxRadius, 30, 100, 100);
@@ -18,6 +19,8 @@ public class SpawnerGameObject : MonoBehaviour {
     List<Vector2> poisson(float minRad, float maxRad, int k, float width, float height) {
         List<Vector2> points = new List<Vector2>();
         List<Vector2> active = new List<Vector2>();
+
+        readableDensityTexture = duplicateTexture(densityTexture);
 
         Vector2 p0 = new Vector2(Random.Range(0, width), Random.Range(0, height));
 
@@ -91,10 +94,28 @@ public class SpawnerGameObject : MonoBehaviour {
     private float getPointRadius(Vector2 point, float width, float height) {
         float u = point.x/width;
         float v = point.y/height;
-        return sampleTexture(densityTexture, u, v);
+        return sampleTexture(readableDensityTexture, u, v);
     }
 
     private float sampleTexture(Texture2D texture, float u, float v) {
         return 1-texture.GetPixelBilinear(u, v).r;
+    }
+
+    private Texture2D duplicateTexture(Texture2D source) {
+        RenderTexture renderTex = RenderTexture.GetTemporary(source.width,
+                                                             source.height,
+                                                             0,
+                                                             RenderTextureFormat.Default,
+                                                             RenderTextureReadWrite.Linear);
+    
+        Graphics.Blit(source, renderTex);
+        RenderTexture previous = RenderTexture.active;
+        RenderTexture.active = renderTex;
+        Texture2D readableText = new Texture2D(source.width, source.height);
+        readableText.ReadPixels(new Rect(0, 0, renderTex.width, renderTex.height), 0, 0);
+        readableText.Apply();
+        RenderTexture.active = previous;
+        RenderTexture.ReleaseTemporary(renderTex);
+        return readableText;
     }
 }
