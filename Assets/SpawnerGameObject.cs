@@ -5,37 +5,22 @@ using UnityEngine;
 public class SpawnerGameObject : MonoBehaviour {
     public GameObject meshToPlace;
     
-    public float radius;
+    public float minRadius, maxRadius;
     // Start is called before the first frame update
     void Start() {
-        List<Vector2> list = poisson(radius, 30, 100, 100);
-        list.Add(new Vector2(0, 0));
-        list.Add(new Vector2(3, 0));
+        List<Vector2> list = poisson(minRadius, maxRadius, 30, 100, 100);
         foreach (Vector2 point in list) {
-            Instantiate(meshToPlace, new Vector3(point.x-50, 0, point.y-50), Quaternion.identity);
+            
         }
     }
 
-    List<Vector2> poisson(float rad, int k, float width, float height) {
+    List<Vector2> poisson(float minRad, float maxRad, int k, float width, float height) {
         List<Vector2> points = new List<Vector2>();
         List<Vector2> active = new List<Vector2>();
 
         Vector2 p0 = new Vector2(Random.Range(0, width), Random.Range(0, height));
 
-        Vector2[,] grid;
-        float cellsize = Mathf.Ceil(rad/1.41421356237f);
-
-        int ncells_width = (int)Mathf.Ceil(width/cellsize) + 1;
-        int ncells_height = (int)Mathf.Ceil(height/cellsize) + 1;
-
-        grid = new Vector2[ncells_width,ncells_height];
-        for (int i = 0; i < ncells_width; ++i) {
-            for (int j = 0; j < ncells_height; ++j) {
-                grid[i,j] = new Vector2(Mathf.Infinity, Mathf.Infinity);
-            }
-        }
-
-        insertPoint(grid, cellsize, p0);
+        createPoint(p0, Mathf.Lerp(minRad, maxRad, p0.x/width));
         points.Add(p0);
         active.Add(p0);
 
@@ -46,20 +31,29 @@ public class SpawnerGameObject : MonoBehaviour {
             bool found = false;
             for (int tries = 0; tries < k; ++tries) {
                 float theta = Random.Range(0, 360);
-                float new_radius = Random.Range(rad, 2*rad);
+                float new_radius = Random.Range(Mathf.Lerp(minRad, maxRad, p.x/width), 2*Mathf.Lerp(minRad, maxRad, p.x/width));
 
                 float pnewx = p.x + new_radius * Mathf.Cos(theta * Mathf.Deg2Rad);
                 float pnewy = p.y + new_radius * Mathf.Sin(theta * Mathf.Deg2Rad);
                 Vector2 pnew = new Vector2(pnewx, pnewy);
+                
+                GameObject newPointObject = createPoint(pnew, Mathf.Lerp(minRad, maxRad, p.x/width));
 
-                if (!isValidPoint(grid, cellsize, (int)width, (int)height, ncells_width, ncells_height, pnew, rad))
-                    continue;
-
-                points.Add(pnew);
-                insertPoint(grid, cellsize, pnew);
-                active.Add(pnew);
-                found = true;
-                break;
+                // if the point is not valid
+                if (!isValidPoint((int)width, (int)height, newPointObject)) {
+                    // remove the instance for this try
+                    // try again
+                    GameObject.Destroy(newPointObject);
+                }
+                else {
+                    // otherwise
+                    // the point goes into the active list and the points list. 
+                    // we've got it, get out
+                    points.Add(pnew);
+                    active.Add(pnew);
+                    found = true;
+                    break;
+                }
             }
 
             if (!found)
@@ -69,33 +63,26 @@ public class SpawnerGameObject : MonoBehaviour {
         return points;
     }
 
-    bool isValidPoint(Vector2[,] grid, float cellsize,
-                      int width, int height,
-                      int gwidth, int gheight,
-                      Vector2 p, float radius) {
+    bool isValidPoint(int width, int height, GameObject point) {
         // check out shit here
+        Vector2 p = new Vector2(point.transform.position.x, point.transform.position.y);
         if (p.x < 0 || p.x >= width || p.y < 0 || p.y >= height)
             return false;
         
-        int xindex = (int)Mathf.Floor(p.x/cellsize);
-        int yindex = (int)Mathf.Floor(p.y/cellsize);
-        int i0 = Mathf.Max(xindex - 1, 0);
-        int i1 = Mathf.Min(xindex + 1, gwidth - 1);
-        int j0 = Mathf.Max(yindex - 1, 0);
-        int j1 = Mathf.Min(yindex + 1, gheight - 1);
-
-        for (int i = i0; i <= i1; ++i)
-            for (int j = j0; j <= j1; ++j)
-                if (grid[i,j].x != Mathf.Infinity && grid[i,j].y != Mathf.Infinity)
-                    if (Vector2.Distance(grid[i,j], p) < radius)
-                        return false;
+        CircleCollider2D collide = point.GetComponent<CircleCollider2D>();
+        List<Collider2D> collisions = new List<Collider2D>();
+        collide.OverlapCollider(new ContactFilter2D().NoFilter(), collisions);
+        if (collisions.Count > 0) {
+            return false;
+        }
         
         return true;
     }
 
-    void insertPoint(Vector2[,] grid, float cellsize, Vector2 point) {
-        int xindex = (int)Mathf.Floor(point.x/cellsize);
-        int yindex = (int)Mathf.Floor(point.y/cellsize);
-        grid[xindex,yindex] = point;
+    GameObject createPoint(Vector2 point, float r) {
+        GameObject pointObject = Instantiate(meshToPlace, new Vector3(point.x, point.y, 0), Quaternion.identity);
+        CircleCollider2D newCollider = pointObject.AddComponent<CircleCollider2D>() as CircleCollider2D;
+        newCollider.radius = r/2f;
+        return pointObject;
     }
 }
