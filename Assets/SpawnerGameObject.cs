@@ -2,15 +2,26 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 
+public enum Channel {
+    R,
+    G,
+    B,
+    A
+}
+
 public class SpawnerGameObject : MonoBehaviour {
     public GameObject meshToPlace;
 
     public GameObject[] userTerrains;
     private List<GameObject> terrains;
+
+    private float rayDistance;
     
     public float minRadius, maxRadius;
     public Texture2D densityTexture;
     private Texture2D readableDensityTexture;
+
+    public Channel maskChannel = Channel.R;
 
     void Start() {
         terrains = new List<GameObject>();
@@ -138,12 +149,30 @@ public class SpawnerGameObject : MonoBehaviour {
 
     private void placeSpawnedObject(GameObject spawnedObject) {
         Vector3 currentPosition = spawnedObject.transform.position;
+        Vector3 aimingVector = Vector3.down;
+        
+        // RaycastHit[] hits = Physics.RaycastAll((rayDistance * -aimingVector) + position stuff, aimingVector);
 
         // lets raycast
-        RaycastHit[] hits = Physics.RaycastAll(new Vector3(currentPosition.x, 100, currentPosition.y), Vector3.down);
+        RaycastHit[] hits = Physics.RaycastAll(new Vector3(currentPosition.x, rayDistance, currentPosition.y), aimingVector);
         if (hits.Length > 0) {
             foreach (RaycastHit hit in hits) {
                 if (terrains.Contains(hit.collider.gameObject)) {
+                    GameObject hitTerrain = hit.collider.gameObject;
+                    Color32[] vertexColors = hitTerrain.GetComponent<MeshFilter>().sharedMesh.colors32;
+                    int[] triangles = hitTerrain.GetComponent<MeshFilter>().sharedMesh.triangles;
+
+                    Color32 color1 = vertexColors[triangles[hit.triangleIndex * 3 + 0]];
+                    Color32 color2 = vertexColors[triangles[hit.triangleIndex * 3 + 1]];
+                    Color32 color3 = vertexColors[triangles[hit.triangleIndex * 3 + 2]];
+
+                    Vector3 baryCenter = hit.barycentricCoordinate;
+
+                    // maybe need to make a function to resolve barycentric coordinates.
+                    //Color32 vertColor = color1 * baryCenter.x + color2 * baryCenter.y + color3 * baryCenter.z;
+
+                    // THATS OUR VERT COLOR
+
                     // we've hit the first terrain
                     // get the point
                     spawnedObject.transform.position = hit.point;
@@ -154,6 +183,7 @@ public class SpawnerGameObject : MonoBehaviour {
         }
         else {
             // we had no collisions wee woo
+            Debug.Log("no collisions fuck");
         }
     }
 
@@ -168,6 +198,7 @@ public class SpawnerGameObject : MonoBehaviour {
             }
             MeshCollider collider = newTerrain.AddComponent<MeshCollider>();
             collider.sharedMesh = newTerrain.GetComponent<MeshFilter>().sharedMesh;
+            rayDistance = Mathf.Max(rayDistance, collider.sharedMesh.bounds.extents.magnitude+1);
         }
         else {
             // doesnt have a mesh wee woo
