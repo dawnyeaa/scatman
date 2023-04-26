@@ -4,27 +4,39 @@ using UnityEngine;
 
 public class SpawnerGameObject : MonoBehaviour {
     public GameObject meshToPlace;
+
+    public GameObject[] userTerrains;
+    private List<GameObject> terrains;
     
     public float minRadius, maxRadius;
     public Texture2D densityTexture;
     private Texture2D readableDensityTexture;
 
     void Start() {
-        List<Vector2> list = poisson(minRadius, maxRadius, 30, 100, 100);
-        foreach (Vector2 point in list) {
-            
+        terrains = new List<GameObject>();
+        foreach (GameObject terrain in userTerrains) {
+            setupTerrain(terrain);
+        }
+        List<GameObject> list = poisson(minRadius, maxRadius, 30, 100, 100);
+        foreach (GameObject spawnedObject in list) {
+            placeSpawnedObject(spawnedObject);
+        }
+        foreach (GameObject terrain in terrains) {
+            cleanupTerrain(terrain);
         }
     }
 
-    List<Vector2> poisson(float minRad, float maxRad, int k, float width, float height) {
+    List<GameObject> poisson(float minRad, float maxRad, int k, float width, float height) {
         List<Vector2> points = new List<Vector2>();
         List<Vector2> active = new List<Vector2>();
+
+        List<GameObject> spawnedObjects = new List<GameObject>();
 
         readableDensityTexture = duplicateTexture(densityTexture);
 
         Vector2 p0 = new Vector2(Random.Range(0, width), Random.Range(0, height));
 
-        createPoint(p0, Mathf.Lerp(minRad, maxRad, getPointRadius(p0, width, height)));
+        spawnedObjects.Add(createPoint(p0, Mathf.Lerp(minRad, maxRad, getPointRadius(p0, width, height))));
         points.Add(p0);
         active.Add(p0);
 
@@ -48,12 +60,13 @@ public class SpawnerGameObject : MonoBehaviour {
                 if (!isValidPoint((int)width, (int)height, newPointObject)) {
                     // remove the instance for this try
                     // try again
-                    GameObject.Destroy(newPointObject);
+                    Destroy(newPointObject);
                 }
                 else {
                     // otherwise
                     // the point goes into the active list and the points list. 
                     // we've got it, get out
+                    spawnedObjects.Add(newPointObject);
                     points.Add(pnew);
                     active.Add(pnew);
                     found = true;
@@ -65,7 +78,11 @@ public class SpawnerGameObject : MonoBehaviour {
                 active.RemoveAt(random_index);
         }
 
-        return points;
+        foreach (GameObject spawnedObject in spawnedObjects) {
+            Destroy(spawnedObject.GetComponent<CircleCollider2D>());
+        }
+
+        return spawnedObjects;
     }
 
     private bool isValidPoint(int width, int height, GameObject point) {
@@ -117,5 +134,47 @@ public class SpawnerGameObject : MonoBehaviour {
         RenderTexture.active = previous;
         RenderTexture.ReleaseTemporary(renderTex);
         return readableText;
+    }
+
+    private void placeSpawnedObject(GameObject spawnedObject) {
+        Vector3 currentPosition = spawnedObject.transform.position;
+
+        // lets raycast
+        RaycastHit[] hits = Physics.RaycastAll(new Vector3(currentPosition.x, 100, currentPosition.y), Vector3.down);
+        if (hits.Length > 0) {
+            foreach (RaycastHit hit in hits) {
+                if (terrains.Contains(hit.collider.gameObject)) {
+                    // we've hit the first terrain
+                    // get the point
+                    spawnedObject.transform.position = hit.point;
+                    // go to the next object
+                    return;
+                }
+            }
+        }
+        else {
+            // we had no collisions wee woo
+        }
+    }
+
+    private void setupTerrain(GameObject terrain) {
+        GameObject newTerrain = Instantiate(terrain);
+        terrains.Add(newTerrain);
+        if (newTerrain.GetComponent<MeshFilter>() != null) {
+            Component[] components = newTerrain.GetComponents(typeof(Component));
+            foreach (Component component in components) {
+                if (component.GetType() != typeof(Transform) && component.GetType() != typeof(MeshFilter))
+                    Destroy(component);
+            }
+            MeshCollider collider = newTerrain.AddComponent<MeshCollider>();
+            collider.sharedMesh = newTerrain.GetComponent<MeshFilter>().sharedMesh;
+        }
+        else {
+            // doesnt have a mesh wee woo
+        }
+    }
+
+    private void cleanupTerrain(GameObject terrain) {
+        Destroy(terrain);
     }
 }
