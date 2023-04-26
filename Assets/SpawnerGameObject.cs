@@ -170,6 +170,7 @@ public class SpawnerGameObject : MonoBehaviour {
 
                     // maybe need to make a function to resolve barycentric coordinates.
                     //Color32 vertColor = color1 * baryCenter.x + color2 * baryCenter.y + color3 * baryCenter.z;
+                    Color32 vertColor = barycentricColInterp(baryCenter, color1, color2, color3);
 
                     // THATS OUR VERT COLOR
 
@@ -207,5 +208,14 @@ public class SpawnerGameObject : MonoBehaviour {
 
     private void cleanupTerrain(GameObject terrain) {
         Destroy(terrain);
+    }
+
+    private Color32 barycentricColInterp(Vector3 coords, Color32 point1, Color32 point2, Color32 point3) {
+        float rChannel = point1.r * coords.x + point2.r * coords.y + point3.r * coords.z;
+        float gChannel = point1.g * coords.x + point2.g * coords.y + point3.g * coords.z;
+        float bChannel = point1.b * coords.x + point2.b * coords.y + point3.b * coords.z;
+        float aChannel = point1.a * coords.x + point2.a * coords.y + point3.a * coords.z;
+
+        return new Color(rChannel, gChannel, bChannel, aChannel);
     }
 }
