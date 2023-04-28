@@ -24,7 +24,9 @@ public class SpawnerGameObject : MonoBehaviour {
     public Channel maskChannel = Channel.R;
     public float maskClippingThreshold = 0.5f;
 
-    void Start() {
+    public bool setToStatic = true;
+
+    public void Spawn() {
         terrains = new List<GameObject>();
         List<GameObject> culledProps = new List<GameObject>();
         foreach (GameObject terrain in userTerrains) {
@@ -76,7 +78,7 @@ public class SpawnerGameObject : MonoBehaviour {
                 if (!isValidPoint((int)width, (int)height, newPointObject)) {
                     // remove the instance for this try
                     // try again
-                    Destroy(newPointObject);
+                    DestroyImmediate(newPointObject);
                 }
                 else {
                     // otherwise
@@ -95,7 +97,7 @@ public class SpawnerGameObject : MonoBehaviour {
         }
 
         foreach (GameObject spawnedObject in spawnedObjects) {
-            Destroy(spawnedObject.GetComponent<CircleCollider2D>());
+            DestroyImmediate(spawnedObject.GetComponent<CircleCollider2D>());
         }
 
         return spawnedObjects;
@@ -118,7 +120,9 @@ public class SpawnerGameObject : MonoBehaviour {
     }
 
     private GameObject createPoint(Vector2 point, float r) {
-        GameObject pointObject = Instantiate(meshToPlace, new Vector3(point.x, point.y, 0), Quaternion.identity);
+        GameObject pointObject = Instantiate(meshToPlace, new Vector3(point.x, point.y, 0), Quaternion.identity, this.transform);
+        if (setToStatic)
+            pointObject.isStatic = true;
         CircleCollider2D newCollider = pointObject.AddComponent<CircleCollider2D>() as CircleCollider2D;
         newCollider.radius = r/2f;
         return pointObject;
@@ -168,6 +172,9 @@ public class SpawnerGameObject : MonoBehaviour {
                     Color[] vertexColors = hitTerrain.GetComponent<MeshFilter>().sharedMesh.colors;
                     int[] triangles = hitTerrain.GetComponent<MeshFilter>().sharedMesh.triangles;
 
+                    if (vertexColors.Length == 0)
+                        Debug.LogError("There are no vertex colors on this mesh");
+
                     Color color1 = vertexColors[triangles[hit.triangleIndex * 3 + 0]];
                     Color color2 = vertexColors[triangles[hit.triangleIndex * 3 + 1]];
                     Color color3 = vertexColors[triangles[hit.triangleIndex * 3 + 2]];
@@ -177,8 +184,6 @@ public class SpawnerGameObject : MonoBehaviour {
                     // maybe need to make a function to resolve barycentric coordinates.
                     //Color32 vertColor = color1 * baryCenter.x + color2 * baryCenter.y + color3 * baryCenter.z;
                     Color vertColor = barycentricColInterp(baryCenter, color1, color2, color3);
-                    
-                    Debug.Log("returned value: " + vertColor.r);
                     float vertColorChannel;
 
                     switch (maskChannel) {
@@ -215,18 +220,23 @@ public class SpawnerGameObject : MonoBehaviour {
         }
     }
 
-    private void setupTerrain(GameObject terrain) {
-        GameObject newTerrain = Instantiate(terrain);
-        terrains.Add(newTerrain);
-        if (newTerrain.GetComponent<MeshFilter>() != null) {
-            Component[] components = newTerrain.GetComponents(typeof(Component));
-            foreach (Component component in components) {
-                if (component.GetType() != typeof(Transform) && component.GetType() != typeof(MeshFilter))
-                    Destroy(component);
-            }
-            MeshCollider collider = newTerrain.AddComponent<MeshCollider>();
-            collider.sharedMesh = newTerrain.GetComponent<MeshFilter>().sharedMesh;
-            rayDistance = Mathf.Max(rayDistance, collider.sharedMesh.bounds.extents.magnitude+1);
+    private void setupTerrain(GameObject terrain) {//Instantiate(terrain, terrain.transform.position, terrain.transform.rotation, this.transform);
+        if (terrain.GetComponent<MeshFilter>() != null) {
+            GameObject newTerrain = new GameObject();
+            newTerrain.transform.position = terrain.transform.position;
+            newTerrain.transform.rotation = terrain.transform.rotation;
+            newTerrain.transform.localScale = terrain.transform.localScale;
+            newTerrain.transform.SetParent(transform);
+
+            MeshFilter newMeshFilter = newTerrain.AddComponent<MeshFilter>();
+            MeshCollider newCollider = newTerrain.AddComponent<MeshCollider>();
+            
+            Mesh terrainMesh = terrain.GetComponent<MeshFilter>().sharedMesh;
+            newMeshFilter.sharedMesh = terrainMesh;
+            newCollider.sharedMesh = terrainMesh;
+            rayDistance = Mathf.Max(rayDistance, terrainMesh.bounds.extents.magnitude+1);
+            
+            terrains.Add(newTerrain);
         }
         else {
             // doesnt have a mesh wee woo
@@ -234,14 +244,19 @@ public class SpawnerGameObject : MonoBehaviour {
     }
 
     private void cleanupTerrain(GameObject terrain) {
-        Destroy(terrain);
+        DestroyImmediate(terrain);
     }
 
     private void cullProp(GameObject spawnedObject, List<GameObject> spawnedObjects) {
         if (spawnedObjects.Contains(spawnedObject)) {
             spawnedObjects.Remove(spawnedObject);
         }
-        Destroy(spawnedObject);
+        DestroyImmediate(spawnedObject);
+    }
+
+    public void ResetGenerated() {
+        for (int i = transform.childCount; i > 0; --i)
+            DestroyImmediate(transform.GetChild(0).gameObject);
     }
 
     private Color barycentricColInterp(Vector3 coords, Color point1, Color point2, Color point3) {
@@ -249,8 +264,6 @@ public class SpawnerGameObject : MonoBehaviour {
         float gChannel = barycentricInterp(coords, point1.g, point2.g, point3.g);
         float bChannel = barycentricInterp(coords, point1.b, point2.b, point3.b);
         float aChannel = barycentricInterp(coords, point1.a, point2.a, point3.a);
-        
-        Debug.Log("float value: " + rChannel);
 
         return new Color(rChannel, gChannel, bChannel, aChannel);
     }
