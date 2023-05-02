@@ -10,7 +10,8 @@ public enum Channel {
 }
 
 public class SpawnerGameObject : MonoBehaviour {
-    public GameObject meshToPlace;
+    public GameObject userMeshToPlace;
+    private GameObject meshToPlace;
 
     public GameObject[] userTerrains;
     private List<GameObject> terrains;
@@ -26,25 +27,49 @@ public class SpawnerGameObject : MonoBehaviour {
 
     public bool setToStatic = true;
 
+    public int k = 10;
+
+    public Vector2 corner1 = new Vector2(-50, -50);
+    public Vector2 corner2 = new Vector2(50, 50);
+
+    public float value = 10;
+
     public void Spawn() {
         terrains = new List<GameObject>();
         List<GameObject> culledProps = new List<GameObject>();
         foreach (GameObject terrain in userTerrains) {
             setupTerrain(terrain);
         }
-        List<GameObject> list = poisson(minRadius, maxRadius, 30, 100, 100);
+        setupMeshToPlace(userMeshToPlace);
+        List<GameObject> list = poisson(minRadius, maxRadius, k, corner1, corner2);
+        // List<GameObject> list = dumb(100f, 100f);
         foreach (GameObject spawnedObject in list) {
             placeSpawnedObject(spawnedObject, culledProps);
         }
         foreach (GameObject terrain in terrains) {
             cleanupTerrain(terrain);
         }
+        cleanupMeshToPlace(meshToPlace);
         foreach (GameObject spawnedObject in culledProps) {
             cullProp(spawnedObject, list);
         }
     }
 
-    List<GameObject> poisson(float minRad, float maxRad, int k, float width, float height) {
+    List<GameObject> dumb(float width, float height) {
+        List<GameObject> spawnedObjects = new List<GameObject>();
+        for (int i = 0; i < 50; ++i) {
+            for (int j = 0; j < 50; ++j) {
+                spawnedObjects.Add(Instantiate(userMeshToPlace, new Vector3((i/50f)*width, (j/50f)*height, 0), Quaternion.identity, this.transform));
+            }
+        }
+        return spawnedObjects;
+    }
+
+    private Vector2 getWidthAndHeight(Vector2 corner1, Vector2 corner2) {
+        return new Vector2(corner2.x-corner1.x, corner2.y-corner1.y);
+    }
+
+    List<GameObject> poisson(float minRad, float maxRad, int k, Vector2 corner1, Vector2 corner2) {
         List<Vector2> points = new List<Vector2>();
         List<Vector2> active = new List<Vector2>();
 
@@ -52,16 +77,18 @@ public class SpawnerGameObject : MonoBehaviour {
 
         readableDensityTexture = duplicateTexture(densityTexture);
 
-        Vector2 p0 = new Vector2(Random.Range(0, width), Random.Range(0, height));
+        Vector2 p0 = new Vector2(Random.Range(corner1.x, corner2.x), Random.Range(corner1.y, corner2.y));
 
-        spawnedObjects.Add(createPoint(p0, Mathf.Lerp(minRad, maxRad, getPointRadius(p0, width, height))));
+        spawnedObjects.Add(createPoint(p0, Mathf.Lerp(minRad, maxRad, getPointRadius(p0, corner1, corner2))));
         points.Add(p0);
         active.Add(p0);
+
+        int iterations = 0;
 
         while (active.Count > 0) {
             int random_index = Random.Range(0, active.Count);
             Vector2 p = active[random_index];
-            float current_radius = Mathf.Lerp(minRad, maxRad, getPointRadius(p, width, height));
+            float current_radius = Mathf.Lerp(minRad, maxRad, getPointRadius(p, corner1, corner2));
 
             bool found = false;
             for (int tries = 0; tries < k; ++tries) {
@@ -71,20 +98,18 @@ public class SpawnerGameObject : MonoBehaviour {
                 float pnewx = p.x + new_radius * Mathf.Cos(theta * Mathf.Deg2Rad);
                 float pnewy = p.y + new_radius * Mathf.Sin(theta * Mathf.Deg2Rad);
                 Vector2 pnew = new Vector2(pnewx, pnewy);
-                
-                GameObject newPointObject = createPoint(pnew, Mathf.Lerp(minRad, maxRad, getPointRadius(pnew, width, height)));
 
                 // if the point is not valid
-                if (!isValidPoint((int)width, (int)height, newPointObject)) {
+                if (!isValidPoint(corner1, corner2, pnew)) {
                     // remove the instance for this try
                     // try again
-                    DestroyImmediate(newPointObject);
+                    continue;
                 }
                 else {
                     // otherwise
                     // the point goes into the active list and the points list. 
                     // we've got it, get out
-                    spawnedObjects.Add(newPointObject);
+                    spawnedObjects.Add(createPoint(pnew, Mathf.Lerp(minRad, maxRad, getPointRadius(pnew, corner1, corner2))));
                     points.Add(pnew);
                     active.Add(pnew);
                     found = true;
@@ -94,6 +119,8 @@ public class SpawnerGameObject : MonoBehaviour {
 
             if (!found)
                 active.RemoveAt(random_index);
+
+            ++iterations;
         }
 
         foreach (GameObject spawnedObject in spawnedObjects) {
@@ -103,35 +130,42 @@ public class SpawnerGameObject : MonoBehaviour {
         return spawnedObjects;
     }
 
-    private bool isValidPoint(int width, int height, GameObject point) {
+    private bool isValidPoint(Vector2 corner1, Vector2 corner2, Vector2 point) {
         // check out shit here
-        Vector2 p = new Vector2(point.transform.position.x, point.transform.position.y);
-        if (p.x < 0 || p.x >= width || p.y < 0 || p.y >= height)
+        if (point.x < corner1.x || point.x >= corner2.x || point.y < corner1.y || point.y >= corner2.y)
             return false;
         
-        CircleCollider2D collide = point.GetComponent<CircleCollider2D>();
-        List<Collider2D> collisions = new List<Collider2D>();
-        collide.OverlapCollider(new ContactFilter2D().NoFilter(), collisions);
-        if (collisions.Count > 0) {
+        if (Physics2D.OverlapPointAll(point).Length > 0)
             return false;
-        }
         
         return true;
     }
 
     private GameObject createPoint(Vector2 point, float r) {
         GameObject pointObject = Instantiate(meshToPlace, new Vector3(point.x, point.y, 0), Quaternion.identity, this.transform);
-        if (setToStatic)
-            pointObject.isStatic = true;
-        CircleCollider2D newCollider = pointObject.AddComponent<CircleCollider2D>() as CircleCollider2D;
-        newCollider.radius = r/2f;
+        // if (setToStatic)
+        //     pointObject.isStatic = true;
+        CircleCollider2D newCollider = pointObject.GetComponent<CircleCollider2D>();
+        newCollider.radius = r;
         return pointObject;
     }
 
-    private float getPointRadius(Vector2 point, float width, float height) {
-        float u = point.x/width;
-        float v = point.y/height;
-        return sampleTexture(readableDensityTexture, u, v);
+    private void setupMeshToPlace(GameObject userMeshToPlace) {
+        meshToPlace = Instantiate(userMeshToPlace);
+        if (setToStatic)
+            meshToPlace.isStatic = true;
+        CircleCollider2D newCollider = meshToPlace.AddComponent<CircleCollider2D>() as CircleCollider2D;
+    }
+
+    private void cleanupMeshToPlace(GameObject meshToPlace) {
+        DestroyImmediate(meshToPlace);
+    }
+
+    private float getPointRadius(Vector2 point, Vector2 corner1, Vector2 corner2) {
+        float u = Mathf.InverseLerp(corner1.x, corner2.x, point.x);
+        float v = Mathf.InverseLerp(corner1.y, corner2.y, point.y);
+        float sampled = sampleTexture(readableDensityTexture, u, v);
+        return sampled;
     }
 
     private float sampleTexture(Texture2D texture, float u, float v) {
@@ -220,7 +254,7 @@ public class SpawnerGameObject : MonoBehaviour {
         }
     }
 
-    private void setupTerrain(GameObject terrain) {//Instantiate(terrain, terrain.transform.position, terrain.transform.rotation, this.transform);
+    private void setupTerrain(GameObject terrain) {
         if (terrain.GetComponent<MeshFilter>() != null) {
             GameObject newTerrain = new GameObject();
             newTerrain.transform.position = terrain.transform.position;
