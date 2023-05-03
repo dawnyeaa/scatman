@@ -14,7 +14,7 @@ public class SpawnerGameObject : MonoBehaviour {
     private GameObject meshToPlace;
 
     public GameObject[] userTerrains;
-    private List<GameObject> terrains;
+    private List<GameObject> terrains = new List<GameObject>();
 
     private float rayDistance;
     
@@ -35,7 +35,6 @@ public class SpawnerGameObject : MonoBehaviour {
     public float value = 10;
 
     public void Spawn() {
-        terrains = new List<GameObject>();
         List<GameObject> culledProps = new List<GameObject>();
         foreach (GameObject terrain in userTerrains) {
             setupTerrain(terrain);
@@ -46,24 +45,35 @@ public class SpawnerGameObject : MonoBehaviour {
         foreach (GameObject spawnedObject in list) {
             placeSpawnedObject(spawnedObject, culledProps);
         }
-        foreach (GameObject terrain in terrains) {
-            cleanupTerrain(terrain);
-        }
+        cleanupAllTerrains();
         cleanupMeshToPlace(meshToPlace);
         foreach (GameObject spawnedObject in culledProps) {
             cullProp(spawnedObject, list);
         }
     }
 
-    List<GameObject> dumb(float width, float height) {
-        List<GameObject> spawnedObjects = new List<GameObject>();
-        for (int i = 0; i < 50; ++i) {
-            for (int j = 0; j < 50; ++j) {
-                spawnedObjects.Add(Instantiate(userMeshToPlace, new Vector3((i/50f)*width, (j/50f)*height, 0), Quaternion.identity, this.transform));
-            }
+    public void setupAllTerrains() {
+        foreach (GameObject terrain in userTerrains) {
+            setupTerrain(terrain);
         }
-        return spawnedObjects;
     }
+
+    public void cleanupAllTerrains() {
+        foreach (GameObject terrain in terrains) {
+            cleanupTerrain(terrain);
+        }
+        terrains = new List<GameObject>();
+    }
+
+    // List<GameObject> dumb(float width, float height) {
+    //     List<GameObject> spawnedObjects = new List<GameObject>();
+    //     for (int i = 0; i < 50; ++i) {
+    //         for (int j = 0; j < 50; ++j) {
+    //             spawnedObjects.Add(Instantiate(userMeshToPlace, new Vector3((i/50f)*width, (j/50f)*height, 0), Quaternion.identity, this.transform));
+    //         }
+    //     }
+    //     return spawnedObjects;
+    // }
 
     private Vector2 getWidthAndHeight(Vector2 corner1, Vector2 corner2) {
         return new Vector2(corner2.x-corner1.x, corner2.y-corner1.y);
@@ -190,6 +200,24 @@ public class SpawnerGameObject : MonoBehaviour {
         return readableText;
     }
 
+    public Vector3 raycastTerrain(Vector3 castPoint) {
+        setupAllTerrains();
+        Vector3 result = new Vector3(Mathf.Infinity, Mathf.Infinity, Mathf.Infinity);
+        if (terrains.Count > 0) {
+            RaycastHit[] hits = Physics.RaycastAll(castPoint, Vector3.down);
+            if (hits.Length > 0) {
+                foreach (RaycastHit hit in hits) {
+                    if (terrains.Contains(hit.collider.gameObject)) {
+                        result = hit.point;
+                        break;
+                    }
+                }
+            }
+        }
+        cleanupAllTerrains();
+        return result;
+    }
+
     private void placeSpawnedObject(GameObject spawnedObject, List<GameObject> culledProps) {
         Vector3 currentPosition = spawnedObject.transform.position;
         Vector3 aimingVector = Vector3.down;
@@ -206,43 +234,45 @@ public class SpawnerGameObject : MonoBehaviour {
                     Color[] vertexColors = hitTerrain.GetComponent<MeshFilter>().sharedMesh.colors;
                     int[] triangles = hitTerrain.GetComponent<MeshFilter>().sharedMesh.triangles;
 
-                    if (vertexColors.Length == 0)
+                    if (vertexColors.Length == 0) {
                         Debug.LogError("There are no vertex colors on this mesh");
-
-                    Color color1 = vertexColors[triangles[hit.triangleIndex * 3 + 0]];
-                    Color color2 = vertexColors[triangles[hit.triangleIndex * 3 + 1]];
-                    Color color3 = vertexColors[triangles[hit.triangleIndex * 3 + 2]];
-
-                    Vector3 baryCenter = hit.barycentricCoordinate;
-
-                    // maybe need to make a function to resolve barycentric coordinates.
-                    //Color32 vertColor = color1 * baryCenter.x + color2 * baryCenter.y + color3 * baryCenter.z;
-                    Color vertColor = barycentricColInterp(baryCenter, color1, color2, color3);
-                    float vertColorChannel;
-
-                    switch (maskChannel) {
-                        case Channel.R:
-                            vertColorChannel = vertColor.r;
-                            break;
-                        case Channel.G:
-                            vertColorChannel = vertColor.g;
-                            break;
-                        case Channel.B:
-                            vertColorChannel = vertColor.b;
-                            break;
-                        default:
-                            vertColorChannel = vertColor.a;
-                            break;
-                    }
-
-                    if (vertColorChannel < maskClippingThreshold) {
-                        culledProps.Add(spawnedObject);
-                    }
-                    else {
-                        // we've hit the first terrain
-                        // get the point
                         spawnedObject.transform.position = hit.point;
                     }
+                    else {
+                        Color color1 = vertexColors[triangles[hit.triangleIndex * 3 + 0]];
+                        Color color2 = vertexColors[triangles[hit.triangleIndex * 3 + 1]];
+                        Color color3 = vertexColors[triangles[hit.triangleIndex * 3 + 2]];
+
+                        Vector3 baryCenter = hit.barycentricCoordinate;
+
+                        Color vertColor = barycentricColInterp(baryCenter, color1, color2, color3);
+                        float vertColorChannel;
+
+                        switch (maskChannel) {
+                            case Channel.R:
+                                vertColorChannel = vertColor.r;
+                                break;
+                            case Channel.G:
+                                vertColorChannel = vertColor.g;
+                                break;
+                            case Channel.B:
+                                vertColorChannel = vertColor.b;
+                                break;
+                            default:
+                                vertColorChannel = vertColor.a;
+                                break;
+                        }
+
+                        if (vertColorChannel < maskClippingThreshold) {
+                            culledProps.Add(spawnedObject);
+                        }
+                        else {
+                            // we've hit the first terrain
+                            // get the point
+                            spawnedObject.transform.position = hit.point;
+                        }
+                    }
+                    
                     // go to the next object
                     return;
                 }
