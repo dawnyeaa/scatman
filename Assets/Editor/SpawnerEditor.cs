@@ -1,14 +1,26 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
+
 [CustomEditor(typeof(SpawnerGameObject))]
 public class SpawnerEditor : Editor {
   private Vector3 storedCorner1, storedCorner2;
   public Vector3[] storedCornerNeighbors = new Vector3[8];
+  private float[] heights = new float[4];
+  
+  [Flags]
+  private enum Corner {
+    None = 0,
+    SW = 1,
+    SE = 2,
+    NE = 4,
+    NW = 8
+  }
 
-  float neighborOffsetDistance = 5;
+  float neighborOffsetDistance = 15;
 
   public override void OnInspectorGUI() {
     base.OnInspectorGUI();
@@ -47,17 +59,28 @@ public class SpawnerEditor : Editor {
     Vector3 corner1 = new Vector3(spawner.corner1.x, 0, spawner.corner1.y);
     Vector3 corner2 = new Vector3(spawner.corner2.x, 0, spawner.corner2.y);
     Vector3 position = (corner1+corner2)/2f;
-    Handles.DrawWireCube(position, new Vector3(corner2.x-corner1.x, 10000, corner2.z-corner1.z));
+    //Handles.DrawWireCube(position, new Vector3(corner2.x-corner1.x, 10000, corner2.z-corner1.z));
 
     //spawner.raycastTerrain();
 
     Handles hndle = new Handles();
 
     if (!storedCorner1.Equals(corner1) || !storedCorner2.Equals(corner2)) {
-      updateCornerNeighbors();
+      Corner Wflag = (storedCorner1.x != corner1.x)? Corner.NW | Corner.SW : Corner.None;
+      Corner Sflag = (storedCorner1.z != corner1.z)? Corner.SW | Corner.SE : Corner.None;
+      Corner Eflag = (storedCorner2.x != corner2.x)? Corner.SE | Corner.NE : Corner.None;
+      Corner Nflag = (storedCorner2.z != corner2.z)? Corner.NE | Corner.NW : Corner.None;
       storedCorner1 = corner1;
       storedCorner2 = corner2;
+      updateCornerNeighbors(Wflag | Sflag | Eflag | Nflag);
     }
+    
+    drawCornerNeighbors();
+
+    /*
+      for handle drawing location, plane intersection with line from center of area
+      define plane with view vector at height, cross product with left or right from view
+    */
 
     //Debug.Log(hndle.currentCamera);
 
@@ -69,7 +92,7 @@ public class SpawnerEditor : Editor {
     // }
   }
 
-  private void updateCornerNeighbors() {
+  private void updateCornerNeighbors(Corner updatedCorners) {
     SpawnerGameObject spawner = (SpawnerGameObject)target;
 
     Vector3 offsetX = new Vector3(neighborOffsetDistance, 0, 0);
@@ -79,14 +102,63 @@ public class SpawnerEditor : Editor {
     Vector3 cornerNE = new Vector3(spawner.corner2.x, 500000, spawner.corner2.y);
     Vector3 cornerNW = new Vector3(spawner.corner1.x, 500000, spawner.corner2.y);
 
-    storedCornerNeighbors[0] = spawner.raycastTerrain(cornerSW + offsetZ);
-    storedCornerNeighbors[1] = spawner.raycastTerrain(cornerSW + offsetX);
-    storedCornerNeighbors[2] = spawner.raycastTerrain(cornerSE - offsetX);
-    storedCornerNeighbors[3] = spawner.raycastTerrain(cornerSE + offsetZ);
-    storedCornerNeighbors[4] = spawner.raycastTerrain(cornerNE - offsetZ);
-    storedCornerNeighbors[5] = spawner.raycastTerrain(cornerNE - offsetX);
-    storedCornerNeighbors[6] = spawner.raycastTerrain(cornerNW + offsetX);
-    storedCornerNeighbors[7] = spawner.raycastTerrain(cornerNW - offsetZ);
+    if ((updatedCorners & Corner.SW) != 0) {
+      heights[0] = spawner.raycastTerrain(cornerSW).y;
+      // storedCornerNeighbors[0] = spawner.raycastTerrain(cornerSW + offsetZ);
+      // storedCornerNeighbors[1] = spawner.raycastTerrain(cornerSW + offsetX);
+      storedCornerNeighbors[0] = cornerSW + offsetZ;
+      storedCornerNeighbors[0].y = heights[0];
+      storedCornerNeighbors[1] = cornerSW + offsetX;
+      storedCornerNeighbors[1].y = heights[0];
+    }
+    if ((updatedCorners & Corner.SE) != 0) {
+      heights[1] = spawner.raycastTerrain(cornerSE).y;
+      // storedCornerNeighbors[2] = spawner.raycastTerrain(cornerSE - offsetX);
+      // storedCornerNeighbors[3] = spawner.raycastTerrain(cornerSE + offsetZ);
+      storedCornerNeighbors[2] = cornerSE - offsetX;
+      storedCornerNeighbors[2].y = heights[1];
+      storedCornerNeighbors[3] = cornerSE + offsetZ;
+      storedCornerNeighbors[3].y = heights[1];
+    }
+    if ((updatedCorners & Corner.NE) != 0) {
+      heights[2] = spawner.raycastTerrain(cornerNE).y;
+      // storedCornerNeighbors[4] = spawner.raycastTerrain(cornerNE - offsetZ);
+      // storedCornerNeighbors[5] = spawner.raycastTerrain(cornerNE - offsetX);
+      storedCornerNeighbors[4] = cornerNE - offsetZ;
+      storedCornerNeighbors[4].y = heights[2];
+      storedCornerNeighbors[5] = cornerNE - offsetX;
+      storedCornerNeighbors[5].y = heights[2];
+    }
+    if ((updatedCorners & Corner.NW) != 0) {
+      heights[3] = spawner.raycastTerrain(cornerNW).y;
+      // storedCornerNeighbors[6] = spawner.raycastTerrain(cornerNW + offsetX);
+      // storedCornerNeighbors[7] = spawner.raycastTerrain(cornerNW - offsetZ);
+      storedCornerNeighbors[6] = cornerNW + offsetX;
+      storedCornerNeighbors[6].y = heights[3];
+      storedCornerNeighbors[7] = cornerNW - offsetZ;
+      storedCornerNeighbors[7].y = heights[3];
+    }
 
+  }
+
+  private void drawCornerNeighbors() {
+    Vector3 cornerSW = new Vector3(storedCorner1.x, heights[0], storedCorner1.z);
+    Vector3 cornerSE = new Vector3(storedCorner2.x, heights[1], storedCorner1.z);
+    Vector3 cornerNE = new Vector3(storedCorner2.x, heights[2], storedCorner2.z);
+    Vector3 cornerNW = new Vector3(storedCorner1.x, heights[3], storedCorner2.z);
+
+    Handles.DrawLine(cornerSW, storedCornerNeighbors[0]);
+    Handles.DrawLine(cornerSW, storedCornerNeighbors[1]);
+    Handles.DrawLine(cornerSE, storedCornerNeighbors[2]);
+    Handles.DrawLine(cornerSE, storedCornerNeighbors[3]);
+    Handles.DrawLine(cornerNE, storedCornerNeighbors[4]);
+    Handles.DrawLine(cornerNE, storedCornerNeighbors[5]);
+    Handles.DrawLine(cornerNW, storedCornerNeighbors[6]);
+    Handles.DrawLine(cornerNW, storedCornerNeighbors[7]);
+
+    Handles.DrawLine(cornerSW, cornerSW + (Vector3.up * 10000));
+    Handles.DrawLine(cornerSE, cornerSE + (Vector3.up * 10000));
+    Handles.DrawLine(cornerNE, cornerNE + (Vector3.up * 10000));
+    Handles.DrawLine(cornerNW, cornerNW + (Vector3.up * 10000));
   }
 }
