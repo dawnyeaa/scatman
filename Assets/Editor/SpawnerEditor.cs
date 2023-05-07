@@ -21,6 +21,8 @@ public class SpawnerEditor : Editor {
   }
 
   float neighborOffsetDistance = 15;
+  float lineThickness = 2f;
+  float handleSize = 0.035f;
 
   public override void OnInspectorGUI() {
     base.OnInspectorGUI();
@@ -58,7 +60,7 @@ public class SpawnerEditor : Editor {
     Handles.color = new Color(0.8f, 0f, 0.2f, 1f);
     Vector3 corner1 = new Vector3(spawner.corner1.x, 0, spawner.corner1.y);
     Vector3 corner2 = new Vector3(spawner.corner2.x, 0, spawner.corner2.y);
-    Vector3 position = (corner1+corner2)/2f;
+    Vector3 boxCenter = (corner1+corner2)/2f;
     //Handles.DrawWireCube(position, new Vector3(corner2.x-corner1.x, 10000, corner2.z-corner1.z));
 
     //spawner.raycastTerrain();
@@ -81,7 +83,25 @@ public class SpawnerEditor : Editor {
       for handle drawing location, plane intersection with line from center of area
       define plane with view vector at height, cross product with left or right from view
     */
+    Camera currentCam = hndle.currentCamera;
+    Vector3 heightPointWS = currentCam.ViewportToWorldPoint(new Vector3(0.5f, 0.6f, 1));
+    Vector3 heightPointFromCam = heightPointWS - currentCam.transform.position;
+    Vector3 planeNormal = Vector3.Cross(heightPointFromCam, currentCam.transform.right).normalized;
 
+    float handleHeight = 0;
+    float planeDotLine = Vector3.Dot(Vector3.up, planeNormal);
+    if (planeDotLine != 0) {
+      handleHeight = Vector3.Dot((heightPointWS-boxCenter), planeNormal)/planeDotLine;
+    }
+
+    Vector3 handleWpos = new Vector3(corner1.x, handleHeight, boxCenter.z);
+    spawner.corner1.x = Handles.FreeMoveHandle(handleWpos, Quaternion.identity, HandleUtility.GetHandleSize(handleWpos)*handleSize, Vector3.zero, Handles.DotHandleCap).x;
+    Vector3 handleSpos = new Vector3(boxCenter.x, handleHeight, corner1.z);
+    spawner.corner1.y = Handles.FreeMoveHandle(handleSpos, Quaternion.identity, HandleUtility.GetHandleSize(handleSpos)*handleSize, Vector3.zero, Handles.DotHandleCap).z;
+    Vector3 handleEpos = new Vector3(corner2.x, handleHeight, boxCenter.z);
+    spawner.corner2.x = Handles.FreeMoveHandle(handleEpos, Quaternion.identity, HandleUtility.GetHandleSize(handleEpos)*handleSize, Vector3.zero, Handles.DotHandleCap).x;
+    Vector3 handleNpos = new Vector3(boxCenter.x, handleHeight, corner2.z);
+    spawner.corner2.y = Handles.FreeMoveHandle(handleNpos, Quaternion.identity, HandleUtility.GetHandleSize(handleNpos)*handleSize, Vector3.zero, Handles.DotHandleCap).z;
     //Debug.Log(hndle.currentCamera);
 
     // EditorGUI.BeginChangeCheck();
@@ -147,18 +167,18 @@ public class SpawnerEditor : Editor {
     Vector3 cornerNE = new Vector3(storedCorner2.x, heights[2], storedCorner2.z);
     Vector3 cornerNW = new Vector3(storedCorner1.x, heights[3], storedCorner2.z);
 
-    Handles.DrawLine(cornerSW, storedCornerNeighbors[0]);
-    Handles.DrawLine(cornerSW, storedCornerNeighbors[1]);
-    Handles.DrawLine(cornerSE, storedCornerNeighbors[2]);
-    Handles.DrawLine(cornerSE, storedCornerNeighbors[3]);
-    Handles.DrawLine(cornerNE, storedCornerNeighbors[4]);
-    Handles.DrawLine(cornerNE, storedCornerNeighbors[5]);
-    Handles.DrawLine(cornerNW, storedCornerNeighbors[6]);
-    Handles.DrawLine(cornerNW, storedCornerNeighbors[7]);
+    Handles.DrawLine(cornerSW, storedCornerNeighbors[0], lineThickness);
+    Handles.DrawLine(cornerSW, storedCornerNeighbors[1], lineThickness);
+    Handles.DrawLine(cornerSE, storedCornerNeighbors[2], lineThickness);
+    Handles.DrawLine(cornerSE, storedCornerNeighbors[3], lineThickness);
+    Handles.DrawLine(cornerNE, storedCornerNeighbors[4], lineThickness);
+    Handles.DrawLine(cornerNE, storedCornerNeighbors[5], lineThickness);
+    Handles.DrawLine(cornerNW, storedCornerNeighbors[6], lineThickness);
+    Handles.DrawLine(cornerNW, storedCornerNeighbors[7], lineThickness);
 
-    Handles.DrawLine(cornerSW, cornerSW + (Vector3.up * 10000));
-    Handles.DrawLine(cornerSE, cornerSE + (Vector3.up * 10000));
-    Handles.DrawLine(cornerNE, cornerNE + (Vector3.up * 10000));
-    Handles.DrawLine(cornerNW, cornerNW + (Vector3.up * 10000));
+    Handles.DrawLine(cornerSW, cornerSW + (Vector3.up * 10000), lineThickness);
+    Handles.DrawLine(cornerSE, cornerSE + (Vector3.up * 10000), lineThickness);
+    Handles.DrawLine(cornerNE, cornerNE + (Vector3.up * 10000), lineThickness);
+    Handles.DrawLine(cornerNW, cornerNW + (Vector3.up * 10000), lineThickness);
   }
 }
