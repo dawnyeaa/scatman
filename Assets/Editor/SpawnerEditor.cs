@@ -63,7 +63,7 @@ public class SpawnerEditor : Editor {
     Vector3 boxCenter = (corner1+corner2)/2f;
     //Handles.DrawWireCube(position, new Vector3(corner2.x-corner1.x, 10000, corner2.z-corner1.z));
 
-    //spawner.raycastTerrain();
+    //spawner.raycastTerrainPoint();
 
     Handles hndle = new Handles();
 
@@ -123,36 +123,36 @@ public class SpawnerEditor : Editor {
     Vector3 cornerNW = new Vector3(spawner.corner1.x, 500000, spawner.corner2.y);
 
     if ((updatedCorners & Corner.SW) != 0) {
-      heights[0] = spawner.raycastTerrain(cornerSW).y;
-      // storedCornerNeighbors[0] = spawner.raycastTerrain(cornerSW + offsetZ);
-      // storedCornerNeighbors[1] = spawner.raycastTerrain(cornerSW + offsetX);
+      heights[0] = spawner.raycastTerrainPoint(cornerSW).y;
+      // storedCornerNeighbors[0] = spawner.raycastTerrainPoint(cornerSW + offsetZ);
+      // storedCornerNeighbors[1] = spawner.raycastTerrainPoint(cornerSW + offsetX);
       storedCornerNeighbors[0] = cornerSW + offsetZ;
       storedCornerNeighbors[0].y = heights[0];
       storedCornerNeighbors[1] = cornerSW + offsetX;
       storedCornerNeighbors[1].y = heights[0];
     }
     if ((updatedCorners & Corner.SE) != 0) {
-      heights[1] = spawner.raycastTerrain(cornerSE).y;
-      // storedCornerNeighbors[2] = spawner.raycastTerrain(cornerSE - offsetX);
-      // storedCornerNeighbors[3] = spawner.raycastTerrain(cornerSE + offsetZ);
+      heights[1] = spawner.raycastTerrainPoint(cornerSE).y;
+      // storedCornerNeighbors[2] = spawner.raycastTerrainPoint(cornerSE - offsetX);
+      // storedCornerNeighbors[3] = spawner.raycastTerrainPoint(cornerSE + offsetZ);
       storedCornerNeighbors[2] = cornerSE - offsetX;
       storedCornerNeighbors[2].y = heights[1];
       storedCornerNeighbors[3] = cornerSE + offsetZ;
       storedCornerNeighbors[3].y = heights[1];
     }
     if ((updatedCorners & Corner.NE) != 0) {
-      heights[2] = spawner.raycastTerrain(cornerNE).y;
-      // storedCornerNeighbors[4] = spawner.raycastTerrain(cornerNE - offsetZ);
-      // storedCornerNeighbors[5] = spawner.raycastTerrain(cornerNE - offsetX);
+      heights[2] = spawner.raycastTerrainPoint(cornerNE).y;
+      // storedCornerNeighbors[4] = spawner.raycastTerrainPoint(cornerNE - offsetZ);
+      // storedCornerNeighbors[5] = spawner.raycastTerrainPoint(cornerNE - offsetX);
       storedCornerNeighbors[4] = cornerNE - offsetZ;
       storedCornerNeighbors[4].y = heights[2];
       storedCornerNeighbors[5] = cornerNE - offsetX;
       storedCornerNeighbors[5].y = heights[2];
     }
     if ((updatedCorners & Corner.NW) != 0) {
-      heights[3] = spawner.raycastTerrain(cornerNW).y;
-      // storedCornerNeighbors[6] = spawner.raycastTerrain(cornerNW + offsetX);
-      // storedCornerNeighbors[7] = spawner.raycastTerrain(cornerNW - offsetZ);
+      heights[3] = spawner.raycastTerrainPoint(cornerNW).y;
+      // storedCornerNeighbors[6] = spawner.raycastTerrainPoint(cornerNW + offsetX);
+      // storedCornerNeighbors[7] = spawner.raycastTerrainPoint(cornerNW - offsetZ);
       storedCornerNeighbors[6] = cornerNW + offsetX;
       storedCornerNeighbors[6].y = heights[3];
       storedCornerNeighbors[7] = cornerNW - offsetZ;

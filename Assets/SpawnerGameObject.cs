@@ -23,6 +23,7 @@ public class SpawnerGameObject : MonoBehaviour {
     private Texture2D readableDensityTexture;
 
     public Channel maskChannel = Channel.R;
+    [Range(0.0f, 1.0f)]
     public float maskClippingThreshold = 0.5f;
 
     public bool setToStatic = true;
@@ -33,6 +34,13 @@ public class SpawnerGameObject : MonoBehaviour {
     public Vector2 corner2 = new Vector2(50, 50);
 
     public float value = 10;
+
+    [Range(0.0f, 1.0f)]
+    public float angleMaskThreshold = 0.5f;
+
+    public bool surfaceAngleToggle = true;
+
+    public bool randomSpinToggle = true;
 
     public void Spawn() {
         List<GameObject> culledProps = new List<GameObject>();
@@ -200,88 +208,113 @@ public class SpawnerGameObject : MonoBehaviour {
         return readableText;
     }
 
-    public Vector3 raycastTerrain(Vector3 castPoint) {
-        setupAllTerrains();
-        Vector3 result = new Vector3(Mathf.Infinity, Mathf.Infinity, Mathf.Infinity);
+    private RaycastHit raycastTerrain(Vector3 castPoint) {
+        RaycastHit result = new RaycastHit();
+        result.point = new Vector3(Mathf.Infinity, Mathf.Infinity, Mathf.Infinity);
+        float height = -Mathf.Infinity;
         if (terrains.Count > 0) {
             RaycastHit[] hits = Physics.RaycastAll(castPoint, Vector3.down);
             if (hits.Length > 0) {
                 foreach (RaycastHit hit in hits) {
                     if (terrains.Contains(hit.collider.gameObject)) {
-                        result = hit.point;
-                        break;
+                        if (hit.point.y > height) {
+                            result = hit;
+                            height = hit.point.y;
+                        }
                     }
                 }
             }
         }
+        return result;
+    }
+
+    public Vector3 raycastTerrainPoint(Vector3 castPoint) {
+        setupAllTerrains();
+        Vector3 result = raycastTerrain(castPoint).point;
         cleanupAllTerrains();
         return result;
     }
 
     private void placeSpawnedObject(GameObject spawnedObject, List<GameObject> culledProps) {
         Vector3 currentPosition = spawnedObject.transform.position;
-        Vector3 aimingVector = Vector3.down;
-        
-        // RaycastHit[] hits = Physics.RaycastAll((rayDistance * -aimingVector) + position stuff, aimingVector);
 
         // lets raycast
-        RaycastHit[] hits = Physics.RaycastAll(new Vector3(currentPosition.x, rayDistance, currentPosition.y), aimingVector);
-        if (hits.Length > 0) {
-            foreach (RaycastHit hit in hits) {
-                if (terrains.Contains(hit.collider.gameObject)) {
-                    GameObject hitTerrain = hit.collider.gameObject;
-                    
-                    Color[] vertexColors = hitTerrain.GetComponent<MeshFilter>().sharedMesh.colors;
-                    int[] triangles = hitTerrain.GetComponent<MeshFilter>().sharedMesh.triangles;
+        RaycastHit hit = raycastTerrain(new Vector3(currentPosition.x, rayDistance, currentPosition.y));
+        if (hit.point.x != Mathf.Infinity) {
+            GameObject hitTerrain = hit.collider.gameObject;
+            
+            Color[] vertexColors = hitTerrain.GetComponent<MeshFilter>().sharedMesh.colors;
+            int[] triangles = hitTerrain.GetComponent<MeshFilter>().sharedMesh.triangles;
 
-                    if (vertexColors.Length == 0) {
-                        Debug.LogError("There are no vertex colors on this mesh");
+            if (vertexColors.Length == 0) {
+                if (checkIncline(spawnedObject, hit)) {
+                    spawnedObject.transform.position = hit.point;
+                    if (surfaceAngleToggle)
+                        spawnedObject.transform.rotation *= Quaternion.FromToRotation(Vector3.up, hit.normal);
+                    // ok so we got random spinnys on them
+                    // we need to do a range control for that (random between two constants)
+                    // and then the same kinda deal for scale okay? u got this todd
+                    spawnedObject.transform.RotateAround(spawnedObject.transform.position, spawnedObject.transform.up, Random.Range(0, 360));
+                }
+                else
+                    culledProps.Add(spawnedObject);
+            }
+            else {
+                Color color1 = vertexColors[triangles[hit.triangleIndex * 3 + 0]];
+                Color color2 = vertexColors[triangles[hit.triangleIndex * 3 + 1]];
+                Color color3 = vertexColors[triangles[hit.triangleIndex * 3 + 2]];
+
+                Vector3 baryCenter = hit.barycentricCoordinate;
+
+                Color vertColor = barycentricColInterp(baryCenter, color1, color2, color3);
+                float vertColorChannel;
+
+                switch (maskChannel) {
+                    case Channel.R:
+                        vertColorChannel = vertColor.r;
+                        break;
+                    case Channel.G:
+                        vertColorChannel = vertColor.g;
+                        break;
+                    case Channel.B:
+                        vertColorChannel = vertColor.b;
+                        break;
+                    default:
+                        vertColorChannel = vertColor.a;
+                        break;
+                }
+
+                if (vertColorChannel < maskClippingThreshold) {
+                    culledProps.Add(spawnedObject);
+                }
+                else {
+                    // we've hit the first terrain
+                    // get the point
+                    if (checkIncline(spawnedObject, hit)) {
                         spawnedObject.transform.position = hit.point;
+                        if (surfaceAngleToggle)
+                            spawnedObject.transform.rotation *= Quaternion.FromToRotation(Vector3.up, hit.normal);
+                        spawnedObject.transform.RotateAround(spawnedObject.transform.position, spawnedObject.transform.up, Random.Range(0, 360));
                     }
-                    else {
-                        Color color1 = vertexColors[triangles[hit.triangleIndex * 3 + 0]];
-                        Color color2 = vertexColors[triangles[hit.triangleIndex * 3 + 1]];
-                        Color color3 = vertexColors[triangles[hit.triangleIndex * 3 + 2]];
-
-                        Vector3 baryCenter = hit.barycentricCoordinate;
-
-                        Color vertColor = barycentricColInterp(baryCenter, color1, color2, color3);
-                        float vertColorChannel;
-
-                        switch (maskChannel) {
-                            case Channel.R:
-                                vertColorChannel = vertColor.r;
-                                break;
-                            case Channel.G:
-                                vertColorChannel = vertColor.g;
-                                break;
-                            case Channel.B:
-                                vertColorChannel = vertColor.b;
-                                break;
-                            default:
-                                vertColorChannel = vertColor.a;
-                                break;
-                        }
-
-                        if (vertColorChannel < maskClippingThreshold) {
-                            culledProps.Add(spawnedObject);
-                        }
-                        else {
-                            // we've hit the first terrain
-                            // get the point
-                            spawnedObject.transform.position = hit.point;
-                        }
-                    }
-                    
-                    // go to the next object
-                    return;
+                    else
+                        culledProps.Add(spawnedObject);
                 }
             }
+            
+            // go to the next object
+            return;
         }
         else {
             // we had no collisions wee woo
             Debug.Log("no collisions fuck");
         }
+    }
+
+    private bool checkIncline(GameObject spawnedObject, RaycastHit hit) {
+        float inclineCos = 1-Vector3.Dot(Vector3.up, hit.normal);
+        inclineCos = (float)System.Math.Round((double)inclineCos, 5);
+        float thresholdCos = 1-Mathf.Cos(angleMaskThreshold*(Mathf.PI/2f));
+        return inclineCos <= thresholdCos;
     }
 
     private void setupTerrain(GameObject terrain) {
